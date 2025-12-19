@@ -22,7 +22,7 @@ latest_hr_data = {
     "count": 0
 }
 
-def get_hr_data():
+def get_hr_data(): # Single GET request for heart rate data, i.e. not periodic
     """GET heart rate data from Oura API."""
     headers = {"Authorization": f"Bearer {access_token}"}
     hr_data = requests.get(
@@ -36,7 +36,7 @@ def get_hr_data():
     return hr_array
 
 def update_hr_data_periodically(interval_seconds=60):
-    """Background function that continuously updates the latest HR data."""
+    """Background function that periodically updates the heart rate data"""
     while True:
         try:
             hr_data = get_hr_data()

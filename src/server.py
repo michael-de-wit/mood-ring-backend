@@ -3,8 +3,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from data_access import get_hr_data, update_hr_data_periodically, latest_hr_data
 import asyncio
 from threading import Thread
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+hr_update_frequency_sec = 60
+
+@asynccontextmanager # context manager decorator; enables the before/after yield structure
+async def lifespan(app: FastAPI): # lifespan function; before yield: upon app start-up; after yield: upon app shut-down
+    """Manage application lifespan events."""
+    # Startup: Start the background task to update HR data periodically
+    thread = Thread(target=update_hr_data_periodically, args=(hr_update_frequency_sec,), daemon=True)
+    thread.start()
+    print(f"Started periodic HR data updates (every {hr_update_frequency_sec} seconds)")
+
+    yield
+
+    # Shutdown: Add any cleanup code here if needed
+    print("Shutting down HR data updates...")
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -13,15 +29,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("startup")
-async def startup_event():
-    """Start the background task to update HR data periodically."""
-    # Start background thread
-    thread = Thread(target=update_hr_data_periodically, args=(60,), daemon=True)
-    thread.start()
-    print("Started periodic HR data updates (every 60 seconds)")
-
 
 @app.get("/heartratetimeseries")
 async def get_heart_rate_time_series_data():
