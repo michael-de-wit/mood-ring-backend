@@ -1,39 +1,38 @@
 from fastapi import FastAPI, Request, HTTPException, BackgroundTasks, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from data_access import get_hr_data, update_hr_data_periodically, latest_hr_data
 from threading import Thread
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
+from pydantic import BaseModel # data type validation
 import os
 from dotenv import load_dotenv
 from typing import List
 import asyncio
 
+# import data_access.py functions
+from data_access import get_hr_data, update_hr_data_periodically, latest_hr_data
 
 load_dotenv()
 
-hr_update_frequency_sec = 20
+hr_update_frequency_sec = 20 # polling frequency of Oura API; in seconds; assumes webhook not available
 
 @asynccontextmanager # context manager decorator; enables the before/after yield structure
-async def lifespan(app: FastAPI): # lifespan function; before yield: upon app start-up; after yield: upon app shut-down
-    """Manage application lifespan events."""
+async def lifespan(app: FastAPI): # lifespan function; before yield: upon app start-up; 
+                                  # after yield: upon app shut-down
+    """Manage application lifespan events"""
     
     # Function to notify websocket clients (runs in background thread)
     def notify_clients(message):
-        # Schedule the coroutine in the event loop
         try:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(manager.broadcast(message))
-            loop.close()
+            print(f"{message=}")
+            asyncio.run(manager.broadcast(message)) #asyncio.run runs async code from sync code
         except Exception as e:
             print(f"Error notifying clients: {e}")
     
     # Startup: Start the background task to update HR data periodically
     thread = Thread(
-        target=update_hr_data_periodically, 
-        args=(hr_update_frequency_sec, notify_clients), 
+        target=update_hr_data_periodically, # this is the function that runs in the thread
+        args=(hr_update_frequency_sec, notify_clients), # callback function: notify_clients
         daemon=True
     )
     thread.start()
