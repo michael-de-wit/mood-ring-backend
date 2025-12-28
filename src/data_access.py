@@ -9,8 +9,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Heart rate day start & end dates for GET from Oura API
-hr_start_date = "2025-12-19"
-hr_end_date = "2026-12-20"
+hr_start_date = "2025-12-27"
+hr_end_date = "2026-12-28"
 
 # Step 3: Use the access token to make API calls
 access_token = os.getenv("OURA_ACCESS_TOKEN")
@@ -35,7 +35,7 @@ def get_hr_data(): # Single GET request for heart rate data, i.e. not periodic
     hr_array = hr_data.json().get('data', [])
     return hr_array
 
-def update_hr_data_periodically(interval_seconds=60):
+def update_hr_data_periodically(interval_seconds=60, notify_callback=None):
     """Background function that periodically updates the heart rate data"""
     while True:
         try:
@@ -44,6 +44,14 @@ def update_hr_data_periodically(interval_seconds=60):
             latest_hr_data["last_updated"] = datetime.now().isoformat()
             latest_hr_data["count"] = len(hr_data)
             print(f"Updated HR data: {len(hr_data)} records at {latest_hr_data['last_updated']}")
+            
+            # Notify WebSocket clients if callback provided
+            if notify_callback:
+                notify_callback({
+                    "type": "heartrate_update",
+                    "count": len(hr_data),
+                    "last_updated": latest_hr_data["last_updated"]
+                })
         except Exception as e:
             print(f"Error updating HR data: {e}")
 
