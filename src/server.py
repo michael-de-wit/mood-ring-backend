@@ -84,7 +84,7 @@ class ConnectionManager:
 
 # Create global connection manager
 manager = ConnectionManager()
-
+# websocket
 @app.websocket("/ws/heartrate")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
