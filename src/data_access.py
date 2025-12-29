@@ -23,7 +23,7 @@ def get_hr_data(): # Single GET request for heart rate data, i.e. not periodic
     headers = {"Authorization": f"Bearer {access_token}"}
 
     # Heart rate start & end datetimes for Oura API GET
-    hr_end_datetime = datetime.now() # current time
+    hr_end_datetime = datetime.now(timezone.utc) # current time
     hr_start_datetime = hr_end_datetime - timedelta(days=1) # current time minus 1 day
 
      # Cast into string format for requests.get()
@@ -39,6 +39,7 @@ def get_hr_data(): # Single GET request for heart rate data, i.e. not periodic
 
     # Extract just the heart rate data array from hr_data 'data' element
     hr_array = hr_data.json().get('data', [])
+    print(f"{hr_array=}")
     return hr_array
 
 def update_hr_data_periodically(interval_seconds=60, notify_callback=None):

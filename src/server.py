@@ -24,7 +24,6 @@ async def lifespan(app: FastAPI): # lifespan function; before yield: upon app st
     # Function to notify websocket clients (runs in background thread)
     def notify_clients(message):
         try:
-            print(f"{message=}")
             asyncio.run(manager.broadcast(message)) #asyncio.run runs async code from sync code
         except Exception as e:
             print(f"Error notifying clients: {e}")
