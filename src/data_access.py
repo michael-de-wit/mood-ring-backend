@@ -61,7 +61,7 @@ def update_hr_data_periodically(interval_seconds=60, notify_callback=None):
             # Create message for notification of websocket clients of the most recent GET request from Oura API
             if notify_callback:
                 notify_callback({
-                    "type": "heartrate_update",
+                    "type": "heartrate_update", # front-end looks for this type to fetch data
                     "count": current_count,
                     "count_diff": count_diff,
                     "last_updated": latest_hr_data["last_updated"]
