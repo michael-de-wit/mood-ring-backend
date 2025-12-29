@@ -72,11 +72,12 @@ class ConnectionManager:
         disconnected = []
         for connection in self.active_connections:
             try:
+                print(f"broadcast to: {connection.url=}")
                 await connection.send_json(message)
             except Exception as e:
                 print(f"Error sending to client: {e}")
                 disconnected.append(connection)
-        
+
         # Remove disconnected clients
         for conn in disconnected:
             self.active_connections.remove(conn)
@@ -91,6 +92,7 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             # Keep connection alive and listen for messages
             data = await websocket.receive_text()
+            print(f"{data=}")
             # Echo back or handle client messages if needed
             await websocket.send_json({"type": "pong", "message": "Connected"})
     except Exception as e:
