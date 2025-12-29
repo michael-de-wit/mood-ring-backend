@@ -10,7 +10,12 @@ from typing import List
 import asyncio
 
 # import data_access.py functions
-from data_access import get_hr_data, update_hr_data_periodically, latest_hr_data
+from data_access import (
+    get_hr_data,
+    update_hr_data_periodically,
+    latest_hr_data,
+    get_initial_session_data
+)
 
 load_dotenv()
 
@@ -110,6 +115,11 @@ async def get_heart_rate_time_series_data():
 async def get_live_heart_rate_data():
     """Get the latest periodically-updated HR data."""
     return {"data": latest_hr_data["data"]}
+
+@app.get("/sessiontimeseries")
+async def get_session_data():
+    """Get the latest session time series data"""\
+    # return{"data":}
 
 @app.get("/oura-webhook")
 async def verify_oura_webhook(request: Request):
