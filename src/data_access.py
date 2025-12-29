@@ -10,13 +10,13 @@ from pydantic import BaseModel
 load_dotenv()
 
 class BiosensorData(BaseModel):
-    timestamp: str
-    measurement_type: str
-    measurement_value: int | float | str
-    measurement_unit: str
-    sensor_mode: str
-    data_source: str
-    device_source: str
+    timestamp: str | None = None # e.g. "2025-12-29T05:38:58.000Z"
+    measurement_type: str | None = None # e.g. "heartrate"
+    measurement_value: int | float | str | None = None # e.g. 52 
+    measurement_unit: str | None = None # e.g. "bpm"
+    sensor_mode: str | None = None # e.g. "session"
+    data_source: str | None = None # e.g. "oura"
+    device_source: str | None = None # e.g. "oura_ring_4"
 
 # Access token for Oura API
 access_token = os.getenv("OURA_ACCESS_TOKEN")
@@ -53,12 +53,22 @@ def get_hr_data(): # Single GET request for heart rate data, i.e. not periodic
     return hr_array
 
 def enhance_hr_data(hr_array):
-    enhanced_hr_array = hr_array
+    enhanced_hr_array = []
+    for hr_record in hr_array:
+        biosensor_data = BiosensorData(
+            timestamp=hr_record.get("timestamp"),
+            measurement_type="heartrate",
+            measurement_value=hr_record.get("bpm"),
+            measurement_unit="bpm",
+            sensor_mode=hr_record.get("source"),
+            data_source="oura",
+            device_source="oura_ring_4"
+        )
+        enhanced_hr_array.append(biosensor_data.model_dump())
     return enhanced_hr_array
 
-hr_array = get_hr_data()
-enhanced_hr_array = enhance_hr_data(hr_array)
-print(f"{enhanced_hr_array=}")
+# hr_array = get_hr_data()
+# enhanced_hr_array = enhance_hr_data(hr_array)
 
 def update_hr_data_periodically(interval_seconds=60, notify_callback=None):
     """Background function that periodically retrieves the most recent heart rate data"""
@@ -67,13 +77,15 @@ def update_hr_data_periodically(interval_seconds=60, notify_callback=None):
     while True:
         try:
             hr_data = get_hr_data()
+            enhanced_hr_data = enhance_hr_data(hr_data)
             # print(f"{hr_data=}")
-            current_count = len(hr_data) # count of heart rate records from *current* GET request
+            current_count = len(enhanced_hr_data) # count of heart rate records from *current* GET request
             count_diff = current_count - previous_count # difference in number of heart rates records between the current and previous GET requests
 
-            latest_hr_data["data"] = hr_data
+            latest_hr_data["data"] = enhanced_hr_data
             latest_hr_data["last_updated"] = datetime.now().isoformat()
             latest_hr_data["count"] = current_count
+            print(json.dumps(latest_hr_data, indent=2))
 
             print(f"Pulled {current_count} heart rate records ({count_diff:+d} records) at {latest_hr_data['last_updated']}. Updates every {interval_seconds} seconds.")
 
@@ -128,10 +140,3 @@ def get_initial_session_data():
 session_array_gl = get_initial_session_data()
 # print(json.dumps(session_array_gl, indent=2))
 
-# timestamp: "2025-12-29T05:38:58.000Z"
-# measurement_type: "heartrate"
-# measurement_value: 52
-# measurement_unit: "bpm"
-# sensor_mode: "session"
-# data_source: "oura"
-# device_source: "oura_ring_4"
