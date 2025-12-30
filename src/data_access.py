@@ -21,9 +21,15 @@ class BiosensorData(BaseModel):
 # Access token for Oura API
 access_token = os.getenv("OURA_ACCESS_TOKEN")
 
-# Global date range for API requests (date strings in 'YYYY-MM-DD' format)
+# Global datetime range for API requests
+# Heartrate API needs ISO 8601 datetime format (e.g. "2025-12-30T23:59:59Z")
+# Session API needs date format (e.g. "2025-12-30")
+oura_end_datetime = datetime.now(timezone.utc).isoformat() # current datetime in ISO format
+oura_start_datetime = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat() # 1 day ago in ISO format
 oura_end_date = datetime.now(timezone.utc).date().isoformat() # current date
-oura_start_date = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat() # 2 days ago
+oura_start_date = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat() # 1 day ago
+print(f"{oura_end_datetime=}")
+print(f"{oura_start_datetime=}")
 print(f"{oura_end_date=}")
 print(f"{oura_start_date=}")
 
@@ -34,19 +40,19 @@ latest_hr_data = {
     "count": 0
 }
 
-def get_hr_data(start_date=None, end_date=None): # Single GET request for heart rate data, i.e. not periodic
+def get_hr_data(start_datetime=None, end_datetime=None): # Single GET request for heart rate data, i.e. not periodic
     """One-off GET heart rate data from Oura API."""
     headers = {"Authorization": f"Bearer {access_token}"}
 
     # Use global variables as defaults
-    start_date = start_date or oura_start_date
-    end_date = end_date or oura_end_date
+    start_datetime = start_datetime or oura_start_datetime
+    end_datetime = end_datetime or oura_end_datetime
 
     # GET heart rate data from Oura API
     hr_data = requests.get(
         "https://api.ouraring.com/v2/usercollection/heartrate",
         headers=headers,
-        params={"start_datetime": start_date, "end_datetime": end_date}
+        params={"start_datetime": start_datetime, "end_datetime": end_datetime}
     )
 
     # Extract just the heart rate data array from hr_data 'data' element
@@ -283,21 +289,25 @@ def combine_biosensor_data(enhanced_hr_array: list, enhanced_session_data: list)
 
     return combined_data
 
-def get_combined_biosensor_data(start_date=None, end_date=None, hr_array=None):
+def get_combined_biosensor_data(start_datetime=None, end_datetime=None, start_date=None, end_date=None, hr_array=None):
     """Get all combined biosensor data (HR + session data) for a date range
 
     Args:
-        start_date: Start date for data retrieval (defaults to oura_start_date)
-        end_date: End date for data retrieval (defaults to oura_end_date)
+        start_datetime: Start datetime for HR data retrieval (defaults to oura_start_datetime)
+        end_datetime: End datetime for HR data retrieval (defaults to oura_end_datetime)
+        start_date: Start date for session data retrieval (defaults to oura_start_date)
+        end_date: End date for session data retrieval (defaults to oura_end_date)
         hr_array: Pre-fetched heart rate data (if None, will fetch from API)
     """
     # Use global variables as defaults
+    start_datetime = start_datetime or oura_start_datetime
+    end_datetime = end_datetime or oura_end_datetime
     start_date = start_date or oura_start_date
     end_date = end_date or oura_end_date
 
     # Get and enhance heart rate data (use provided data or fetch fresh)
     if hr_array is None:
-        hr_array = get_hr_data(start_date, end_date)
+        hr_array = get_hr_data(start_datetime, end_datetime)
     enhanced_hr_array = enhance_hr_data(hr_array)
 
     # Get and enhance session data
