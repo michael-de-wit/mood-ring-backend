@@ -21,6 +21,12 @@ class BiosensorData(BaseModel):
 # Access token for Oura API
 access_token = os.getenv("OURA_ACCESS_TOKEN")
 
+# Global date range for API requests (date strings in 'YYYY-MM-DD' format)
+oura_end_date = datetime.now(timezone.utc).date().isoformat() # current date
+oura_start_date = (datetime.now(timezone.utc).date() - timedelta(days=1)).isoformat() # 2 days ago
+print(f"{oura_end_date=}")
+print(f"{oura_start_date=}")
+
 # Store the latest HR data (shared across modules)
 latest_hr_data = {
     "data": [],
@@ -28,30 +34,19 @@ latest_hr_data = {
     "count": 0
 }
 
-# Store the latest session data (shared across modules)
-latest_session_data = {
-    "data": [],
-    "last_updated": None,
-    "count": 0
-}
-
-def get_hr_data(): # Single GET request for heart rate data, i.e. not periodic
+def get_hr_data(start_date=None, end_date=None): # Single GET request for heart rate data, i.e. not periodic
     """One-off GET heart rate data from Oura API."""
     headers = {"Authorization": f"Bearer {access_token}"}
 
-    # Heart rate start & end datetimes for Oura API GET
-    hr_end_datetime = datetime.now(timezone.utc) # current time
-    hr_start_datetime = hr_end_datetime - timedelta(days=1) # current time minus 1 day
+    # Use global variables as defaults
+    start_date = start_date or oura_start_date
+    end_date = end_date or oura_end_date
 
-     # Cast into string format for requests.get()
-    hr_end_datetime_str = hr_end_datetime.isoformat()
-    hr_start_datetime_str = hr_start_datetime.isoformat()
-
-    # GET heart rate data from Oura API 
+    # GET heart rate data from Oura API
     hr_data = requests.get(
         "https://api.ouraring.com/v2/usercollection/heartrate",
         headers=headers,
-        params={"start_datetime": hr_start_datetime_str, "end_datetime": hr_end_datetime_str}
+        params={"start_datetime": start_date, "end_datetime": end_date}
     )
 
     # Extract just the heart rate data array from hr_data 'data' element
@@ -120,32 +115,28 @@ latest_session_data = {
     "count": 0
 }
 
-def get_initial_session_data():
+def get_initial_session_data(start_date=None, end_date=None):
     """One-off GET session data from Oura API"""
     headers = {"Authorization": f"Bearer {access_token}"}
 
-    # Session start & end datetimes for Oura API GET request
-    session_end_datetime = datetime.now(timezone.utc) # current time
-    session_start_datetime = session_end_datetime - timedelta(days=1) # current time minus 1 day
+    # Use global variables as defaults
+    start_date = start_date or oura_start_date
+    end_date = end_date or oura_end_date
 
-     # Cast into string format for requests.get()
-    session_end_datetime_str = session_end_datetime.isoformat()
-    session_start_datetime_str = session_start_datetime.isoformat()
-
-    # GET session data from Oura API 
+    # GET session data from Oura API
     session_data = requests.get(
         "https://api.ouraring.com/v2/usercollection/session",
         headers=headers,
-        params={"start_datetime": session_start_datetime_str, "end_datetime": session_end_datetime_str}
+        params={"start_date": start_date, "end_date": end_date}
     )
 
-    # Extract just the heart rate data array from hr_data 'data' element
+    # Extract just the session 'data' element
     session_array = session_data.json().get('data', [])
-    print(f"{session_array=}")
+    # print(f"{session_array=}")
     return session_array
 
-
-session_array = get_initial_session_data()
+session_array = get_initial_session_data(oura_start_date, oura_end_date)
+print(f"{session_array=}")
 
 def organize_session_data(session_array: list):
     data_arrays = {
@@ -153,6 +144,7 @@ def organize_session_data(session_array: list):
         'heart_rate_variability': [],
         'motion_count': []
     }
+    print(f"{data_arrays=}")
 
     for session in session_array:
         for field_name, array_key in [
