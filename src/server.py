@@ -14,7 +14,8 @@ from data_access import (
     get_hr_data,
     update_hr_data_periodically,
     latest_hr_data,
-    get_initial_session_data
+    get_initial_session_data,
+    latest_session_data
 )
 
 load_dotenv()
@@ -118,8 +119,9 @@ async def get_live_heart_rate_data():
 
 @app.get("/sessiontimeseries")
 async def get_session_data():
-    """Get the latest session time series data"""\
-    # return{"data":}
+    """Get the latest session time series data"""
+    session_array = get_initial_session_data()
+    return{"data": session_array}
 
 @app.get("/oura-webhook")
 async def verify_oura_webhook(request: Request):

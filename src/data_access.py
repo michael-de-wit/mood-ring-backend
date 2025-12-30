@@ -21,9 +21,15 @@ class BiosensorData(BaseModel):
 # Access token for Oura API
 access_token = os.getenv("OURA_ACCESS_TOKEN")
 
-# GET OURA HEART RATE DATA
 # Store the latest HR data (shared across modules)
 latest_hr_data = {
+    "data": [],
+    "last_updated": None,
+    "count": 0
+}
+
+# Store the latest session data (shared across modules)
+latest_session_data = {
     "data": [],
     "last_updated": None,
     "count": 0
@@ -50,6 +56,7 @@ def get_hr_data(): # Single GET request for heart rate data, i.e. not periodic
 
     # Extract just the heart rate data array from hr_data 'data' element
     hr_array = hr_data.json().get('data', [])
+    # print(f"{hr_array=}")
     return hr_array
 
 def enhance_hr_data(hr_array):
@@ -85,7 +92,7 @@ def update_hr_data_periodically(interval_seconds=60, notify_callback=None):
             latest_hr_data["data"] = enhanced_hr_data
             latest_hr_data["last_updated"] = datetime.now().isoformat()
             latest_hr_data["count"] = current_count
-            print(json.dumps(latest_hr_data, indent=2))
+            # print(json.dumps(latest_hr_data, indent=2))
 
             print(f"Pulled {current_count} heart rate records ({count_diff:+d} records) at {latest_hr_data['last_updated']}. Updates every {interval_seconds} seconds.")
 
@@ -134,9 +141,48 @@ def get_initial_session_data():
 
     # Extract just the heart rate data array from hr_data 'data' element
     session_array = session_data.json().get('data', [])
-    # print(f"{session_array=}")
+    print(f"{session_array=}")
     return session_array
 
-session_array_gl = get_initial_session_data()
+
+session_array = get_initial_session_data()
+
+def organize_session_data(session_array: list):
+    data_arrays = {
+        'heart_rate': [],
+        'heart_rate_variability': [],
+        'motion_count': []
+    }
+
+    for session in session_array:
+        for field_name, array_key in [
+            ('heart_rate', 'heart_rate'),
+            ('heart_rate_variability', 'heart_rate_variability'),
+            ('motion_count', 'motion_count')
+        ]:
+            element = session.get(field_name)
+            if not element:
+                continue
+
+            interval = float(element.get('interval', 0))
+            items = element.get('items', [])
+            timestamp_str = element.get('timestamp')
+
+            # Timestamp aligns with 2nd item, so subtract one interval to get base time
+            base_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00')) - timedelta(seconds=interval)
+
+            for i, value in enumerate(items):
+                new_time = base_time + timedelta(seconds=i * interval)
+                data_arrays[array_key].append({
+                    field_name: value,
+                    'timestamp': new_time.astimezone(timezone.utc).isoformat()
+                })
+
+    for key, array in data_arrays.items():
+        print(f"Created {len(array)} {key} records")
+
+    return data_arrays
+
+organize_session_data(session_array)
 # print(json.dumps(session_array_gl, indent=2))
 
