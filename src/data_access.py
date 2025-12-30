@@ -136,21 +136,22 @@ def get_initial_session_data(start_date=None, end_date=None):
     return session_array
 
 session_array = get_initial_session_data(oura_start_date, oura_end_date)
-print(f"{session_array=}")
+# print(f"{session_array=}")
 
-def organize_session_data(session_array: list):
+def timestamp_session_data(session_array: list):
     data_arrays = {
-        'heart_rate': [],
-        'heart_rate_variability': [],
-        'motion_count': []
+        'heart_rate_array': [],
+        'heart_rate_variability_array': [],
+        'motion_count_array': []
     }
-    print(f"{data_arrays=}")
 
     for session in session_array:
+        # Looks for the e.g. heart_rate key in session_array
+        # To save results in heart_rate_array of data_arrays
         for field_name, array_key in [
-            ('heart_rate', 'heart_rate'),
-            ('heart_rate_variability', 'heart_rate_variability'),
-            ('motion_count', 'motion_count')
+            ('heart_rate', 'heart_rate_array'),
+            ('heart_rate_variability', 'heart_rate_variability_array'),
+            ('motion_count', 'motion_count_array')
         ]:
             element = session.get(field_name)
             if not element:
@@ -160,7 +161,10 @@ def organize_session_data(session_array: list):
             items = element.get('items', [])
             timestamp_str = element.get('timestamp')
 
-            # Timestamp aligns with 2nd item, so subtract one interval to get base time
+            # Assuming 'start' timestamp aligns with 2nd item, so subtract one interval to get base time
+            # i.e. assumes that recording starts at t-10, first record at t-5, initial timestamp at t-0
+            # assumes no record at the end timestampt
+            ## checked against a 1 minute session; yielded 13 records; 1 @ t-5, 2 @ t-0, 3-12 @ t+5 to t+50, 13 @ t+55
             base_time = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00')) - timedelta(seconds=interval)
 
             for i, value in enumerate(items):
@@ -175,6 +179,7 @@ def organize_session_data(session_array: list):
 
     return data_arrays
 
-organize_session_data(session_array)
+session_data_arrays = timestamp_session_data(session_array)
+print(f"{session_data_arrays=}")
 # print(json.dumps(session_array_gl, indent=2))
 
