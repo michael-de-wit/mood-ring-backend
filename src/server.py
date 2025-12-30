@@ -15,7 +15,10 @@ from data_access import (
     update_hr_data_periodically,
     latest_hr_data,
     get_initial_session_data,
-    latest_session_data
+    latest_session_data,
+    get_combined_biosensor_data,
+    latest_combined_biosensor_data,
+    update_combined_biosensor_data
 )
 
 load_dotenv()
@@ -90,7 +93,7 @@ class ConnectionManager:
 # Create global connection manager
 manager = ConnectionManager()
 # websocket
-@app.websocket("/ws/heartrate")
+@app.websocket("/ws/ouratimeseries")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
@@ -122,6 +125,17 @@ async def get_session_data():
     """Get the latest session time series data"""
     session_array = get_initial_session_data()
     return{"data": session_array}
+
+@app.get("/ouratimeseries")
+async def get_oura_time_series_data():
+    """Get combined biosensor data (HR + session data)"""
+    combined_data = get_combined_biosensor_data()
+    return {"data": combined_data}
+
+@app.get("/ouratimeseries/live")
+async def get_live_oura_time_series_data():
+    """Get the latest periodically-updated combined biosensor data."""
+    return {"data": latest_combined_biosensor_data["data"]}
 
 @app.get("/oura-webhook")
 async def verify_oura_webhook(request: Request):
@@ -165,10 +179,22 @@ async def process_event_async(event_type: str, data_type: str, object_id: str, u
         print(f"  Object ID: {object_id}")
         print(f"  User ID: {user_id}")
 
-        # Add your event processing logic here
-        # For example, you might fetch new data from the Oura API based on the event
-        # if data_type == "heartrate":
-        #     fetch_and_update_heartrate_data(user_id, object_id)
+        # Function to notify websocket clients (runs in async context)
+        def notify_clients(message):
+            try:
+                asyncio.create_task(manager.broadcast(message))
+            except Exception as e:
+                print(f"Error notifying clients: {e}")
+
+        # Handle session data updates
+        if data_type == "session":
+            print("Session data updated, refreshing combined biosensor data...")
+            update_combined_biosensor_data(notify_callback=notify_clients)
+
+        # Handle heart rate updates (if you want to handle them via webhook too)
+        # elif data_type == "heartrate":
+        #     print("Heart rate data updated via webhook")
+        #     # Could trigger an immediate HR data fetch here instead of waiting for poll
 
     except Exception as e:
         print(f"Error processing webhook event: {e}")

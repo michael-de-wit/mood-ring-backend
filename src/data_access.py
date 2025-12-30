@@ -74,34 +74,37 @@ def enhance_hr_data(hr_array):
 
 def update_hr_data_periodically(interval_seconds=60, notify_callback=None):
     """Background function that periodically retrieves the most recent heart rate data"""
-    previous_count = 0 # count of heart rate records from *previous* GET request
+    previous_hr_count = 0 # count of heart rate records from *previous* GET request
 
     while True:
         try:
             hr_data = get_hr_data()
             enhanced_hr_data = enhance_hr_data(hr_data)
             # print(f"{hr_data=}")
-            current_count = len(enhanced_hr_data) # count of heart rate records from *current* GET request
-            count_diff = current_count - previous_count # difference in number of heart rates records between the current and previous GET requests
+            current_hr_count = len(enhanced_hr_data) # count of heart rate records from *current* GET request
+            hr_count_diff = current_hr_count - previous_hr_count # difference in number of heart rates records between the current and previous GET requests
 
             latest_hr_data["data"] = enhanced_hr_data
             latest_hr_data["last_updated"] = datetime.now().isoformat()
-            latest_hr_data["count"] = current_count
+            latest_hr_data["count"] = current_hr_count
             # print(json.dumps(latest_hr_data, indent=2))
 
-            print(f"Pulled {current_count} heart rate records ({count_diff:+d} records) at {latest_hr_data['last_updated']}. Updates every {interval_seconds} seconds.")
+            print(f"Pulled {current_hr_count} heart rate records ({hr_count_diff:+d} records) at {latest_hr_data['last_updated']}. Updates every {interval_seconds} seconds.")
 
-            # Create message for notification of websocket clients of the most recent GET request from Oura API
-            if notify_callback:
+            # Notify if there's new heart rate data
+            if notify_callback and hr_count_diff != 0:
                 notify_callback({
-                    "type": "heartrate_update", # front-end looks for this type to fetch data
-                    "count": current_count,
-                    "count_diff": count_diff,
+                    "type": "heartrate_update", # front-end looks for this type to fetch HR data
+                    "count": current_hr_count,
+                    "count_diff": hr_count_diff,
                     "last_updated": latest_hr_data["last_updated"]
                 })
 
-            # Update previous heart rate record count for next iteration
-            previous_count = current_count
+            # Update combined biosensor data (this will notify if there are changes)
+            update_combined_biosensor_data(hr_array=hr_data, notify_callback=notify_callback)
+
+            # Update previous record count for next iteration
+            previous_hr_count = current_hr_count
 
         except Exception as e:
             print(f"Error updating HR data: {e}")
@@ -114,6 +117,48 @@ latest_session_data = {
     "last_updated": None,
     "count": 0
 }
+
+# Store the latest combined biosensor data (shared across modules)
+latest_combined_biosensor_data = {
+    "data": [],
+    "last_updated": None,
+    "count": 0
+}
+
+def update_combined_biosensor_data(hr_array=None, notify_callback=None):
+    """Update combined biosensor data and notify clients if there are changes.
+
+    Args:
+        hr_array: Pre-fetched heart rate data (if None, will fetch from API)
+        notify_callback: Function to call for WebSocket notifications
+
+    Returns:
+        dict with 'count' and 'count_diff' keys
+    """
+    previous_count = latest_combined_biosensor_data["count"]
+
+    # Get combined biosensor data
+    combined_data = get_combined_biosensor_data(hr_array=hr_array)
+    current_count = len(combined_data)
+    count_diff = current_count - previous_count
+
+    # Update global state
+    latest_combined_biosensor_data["data"] = combined_data
+    latest_combined_biosensor_data["last_updated"] = datetime.now().isoformat()
+    latest_combined_biosensor_data["count"] = current_count
+
+    print(f"Combined biosensor data: {current_count} total records ({count_diff:+d} records)")
+
+    # Notify if there's new combined biosensor data
+    if notify_callback and count_diff != 0:
+        notify_callback({
+            "type": "ouratimeseries_update",
+            "count": current_count,
+            "count_diff": count_diff,
+            "last_updated": latest_combined_biosensor_data["last_updated"]
+        })
+
+    return {"count": current_count, "count_diff": count_diff}
 
 def get_initial_session_data(start_date=None, end_date=None):
     """One-off GET session data from Oura API"""
@@ -134,9 +179,6 @@ def get_initial_session_data(start_date=None, end_date=None):
     session_array = session_data.json().get('data', [])
     # print(f"{session_array=}")
     return session_array
-
-session_array = get_initial_session_data(oura_start_date, oura_end_date)
-# print(f"{session_array=}")
 
 def timestamp_session_data(session_array: list):
     data_arrays = {
@@ -179,7 +221,100 @@ def timestamp_session_data(session_array: list):
 
     return data_arrays
 
-session_data_arrays = timestamp_session_data(session_array)
-print(f"{session_data_arrays=}")
+def enhance_session_data(session_data_arrays: dict):
+    """Convert session data arrays into BiosensorData format"""
+    enhanced_session_data = []
+
+    # Process heart_rate_array
+    for record in session_data_arrays.get('heart_rate_array', []):
+        biosensor_data = BiosensorData(
+            timestamp=record.get("timestamp"),
+            measurement_type="heartrate",
+            measurement_value=record.get("heart_rate"),
+            measurement_unit="bpm",
+            sensor_mode="session",
+            data_source="oura",
+            device_source="oura_ring_4"
+        )
+        enhanced_session_data.append(biosensor_data.model_dump())
+
+    # Process heart_rate_variability_array
+    for record in session_data_arrays.get('heart_rate_variability_array', []):
+        biosensor_data = BiosensorData(
+            timestamp=record.get("timestamp"),
+            measurement_type="heart_rate_variability",
+            measurement_value=record.get("heart_rate_variability"),
+            measurement_unit="ms",
+            sensor_mode="session",
+            data_source="oura",
+            device_source="oura_ring_4"
+        )
+        enhanced_session_data.append(biosensor_data.model_dump())
+
+    # Process motion_count_array
+    for record in session_data_arrays.get('motion_count_array', []):
+        biosensor_data = BiosensorData(
+            timestamp=record.get("timestamp"),
+            measurement_type="motion_count",
+            measurement_value=record.get("motion_count"),
+            measurement_unit="count",
+            sensor_mode="session",
+            data_source="oura",
+            device_source="oura_ring_4"
+        )
+        enhanced_session_data.append(biosensor_data.model_dump())
+
+    return enhanced_session_data
+
+def combine_biosensor_data(enhanced_hr_array: list, enhanced_session_data: list):
+    """Combine heart rate data and session data into a single unified array"""
+    combined_data = []
+
+    # Add all heart rate data
+    combined_data.extend(enhanced_hr_array)
+
+    # Add all session data
+    combined_data.extend(enhanced_session_data)
+
+    # Sort by timestamp
+    combined_data.sort(key=lambda x: x.get('timestamp', ''))
+
+    print(f"Combined {len(enhanced_hr_array)} HR records + {len(enhanced_session_data)} session records = {len(combined_data)} total records")
+
+    return combined_data
+
+def get_combined_biosensor_data(start_date=None, end_date=None, hr_array=None):
+    """Get all combined biosensor data (HR + session data) for a date range
+
+    Args:
+        start_date: Start date for data retrieval (defaults to oura_start_date)
+        end_date: End date for data retrieval (defaults to oura_end_date)
+        hr_array: Pre-fetched heart rate data (if None, will fetch from API)
+    """
+    # Use global variables as defaults
+    start_date = start_date or oura_start_date
+    end_date = end_date or oura_end_date
+
+    # Get and enhance heart rate data (use provided data or fetch fresh)
+    if hr_array is None:
+        hr_array = get_hr_data(start_date, end_date)
+    enhanced_hr_array = enhance_hr_data(hr_array)
+
+    # Get and enhance session data
+    session_array = get_initial_session_data(start_date, end_date)
+    session_data_arrays = timestamp_session_data(session_array)
+    enhanced_session_data = enhance_session_data(session_data_arrays)
+
+    # Combine both datasets
+    combined_data = combine_biosensor_data(enhanced_hr_array, enhanced_session_data)
+
+    return combined_data
+
+# Test the functions (commented out for production)
+# hr_array = get_hr_data()
+# enhanced_hr_array = enhance_hr_data(hr_array)
+# enhanced_session_data = enhance_session_data(session_data_arrays)
+# combined_biosensor_data = combine_biosensor_data(enhanced_hr_array, enhanced_session_data)
+# print(f"Total biosensor records: {len(combined_biosensor_data)}")
 # print(json.dumps(session_array_gl, indent=2))
 
